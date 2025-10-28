@@ -72,12 +72,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // --- Core Deletion Function with .trim() Fix ---
+    // --- Core Deletion Function with Case-Insensitive Fix ---
     const deleteBooking = async (room, id, pw) => {
-        // 'pw' is the password entered by the user, already trimmed from the prompt
-        if (pw.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
+        // 'pw' is the password entered by the user
+        const inputPassword = pw.trim().toLowerCase(); // Normalize input password for comparison
         
-        const docRef = doc(db, room.collection, id);
+        if (inputPassword.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
+        
+        const docRef = doc(db, room.collection, id); 
         try {
             const snap = await getDoc(docRef);
             
@@ -85,9 +87,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 return alert('Cancelation failed: Booking not found. It may have already been canceled.');
             }
             
-            // CRITICAL FIX: Trim the stored database password before comparison
-            if (snap.data().deletePassword.trim() !== pw) { 
-                return alert('Cancelation failed: Wrong password.');
+            // CRITICAL FIX: Normalize stored password for case-insensitive comparison
+            const storedPassword = snap.data().deletePassword.trim().toLowerCase(); 
+            
+            if (storedPassword !== inputPassword) { 
+                return alert('Cancelation failed: Wrong password.'); 
             }
             
             await deleteDoc(docRef);
@@ -159,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteButton.dataset.id = b.id;
                 deleteButton.textContent = 'x';
                 
-                // CRITICAL FIX: Pass the trimmed password from the prompt
                 deleteButton.onclick = () => {
                     const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
                     if (pw !== null) deleteBooking(room, deleteButton.dataset.id, pw.trim());
@@ -358,8 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
-        // CRITICAL FIX: Trim the password when saving it to the database
-        const deletePassword = document.getElementById('delete-password').value.trim(); 
+        // CRITICAL FIX: Trim and convert the password to lowercase when saving it to the database
+        const deletePassword = document.getElementById('delete-password').value.trim().toLowerCase(); 
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
@@ -377,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             await addDoc(col, {
-                name, project, deletePassword, // Save the trimmed password
+                name, project, deletePassword, // Save the trimmed, lowercase password
                 startTime, endTime, date: bookingDate,
                 timestamp: serverTimestamp()
             });
