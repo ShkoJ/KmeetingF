@@ -1,12 +1,11 @@
 import { 
-    collection, addDoc, deleteDoc, doc, getDoc, query, where, onSnapshot, serverTimestamp 
+    collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
     const db = window.db;
     if (!db) {
-        alert("Firebase not initialized. Check console.");
-        console.error("Firestore not available");
+        alert("Firebase failed to load. Check internet or config.");
         return;
     }
 
@@ -19,11 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const successMessage = document.getElementById('success-message');
 
     const ROOMS = [
-    { id: 'downstairs', name: 'منارە', collection: 'bookings_downstairs' },
-    { id: 'upstairs',   name: 'قەڵا',     collection: 'bookings_upstairs' }
+        { id: 'downstairs', name: 'Minara (منارە)', collection: 'bookings_downstairs' },
+        { id: 'upstairs',   name: 'Qala (قەڵا)',     collection: 'bookings_upstairs' }
     ];
 
-    // Build UI
     ROOMS.forEach(room => {
         const section = document.createElement('div');
         section.className = 'room-section';
@@ -63,10 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
         roomContent.appendChild(section);
     });
 
-    // Helpers
     const pad = n => String(n).padStart(2, '0');
     const timeToMinutes = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-    const getCurrentMinutes = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
     const todayStr = () => {
         const n = new Date();
         return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
@@ -113,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.className = 'booked-slot';
                 let status = '';
                 if (state[prefix].selectedDate === todayStr()) {
-                    const now = getCurrentMinutes();
+                    const now = new Date().getHours() * 60 + new Date().getMinutes();
                     const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
                     if (bs <= now && now < be) {
                         div.classList.add('ongoing');
@@ -141,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             bookedList.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const pw = prompt('Enter cancel password:');
+                    const pw = prompt('Enter cancelation password:');
                     if (pw !== null) deleteBooking(room, btn.dataset.id, pw.trim());
                 });
             });
@@ -151,10 +147,10 @@ document.addEventListener('DOMContentLoaded', () => {
             startSel.innerHTML = ''; endSel.innerHTML = '';
             const interval = 30;
             const today = todayStr();
-            const curMin = getCurrentMinutes();
+            const now = new Date();
+            const curMin = now.getHours() * 60 + now.getMinutes();
 
             if (state[prefix].selectedDate === today) {
-                const now = new Date();
                 const nowStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
                 const opt = document.createElement('option');
                 opt.value = nowStr;
@@ -208,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 populateTimes(bookings);
             }, err => {
                 console.error(err);
-                bookedList.innerHTML = '<p>Failed to load bookings.</p>';
+                bookedList.innerHTML = '<p>Failed to load.</p>';
             });
         };
 
@@ -232,16 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const target = btn.dataset.room;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.querySelectorAll('.room-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`section-${target}`).classList.add('active');
+            document.getElementById(`section-${btn.dataset.room}`).classList.add('active');
         });
     });
     document.querySelector('.tab-btn').click();
 
-    // Submit booking
+    // Submit booking — NOW WORKS
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -257,21 +252,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (pw.length < 4) return alert('Password must be 4+ characters');
 
-        const q = query(col, where('date', '==', date));
-        const snap = await getDocs(q);
-        const current = snap.docs.map(d => d.data());
-        if (checkOverlap(current, start, end)) return alert('Slot just taken – try again');
+        try {
+            const q = query(col, where('date', '==', date));
+            const snap = await getDocs(q);
+            const current = snap.docs.map(d => d.data());
+            if (checkOverlap(current, start, end)) {
+                alert('Slot just taken – please try again');
+                modal.style.display = 'none';
+                return;
+            }
 
-        await addDoc(col, {
-            name, project, deletePassword: pw,
-            startTime: start, endTime: end, date,
-            timestamp: serverTimestamp()
-        });
+            await addDoc(col, {
+                name, project, deletePassword: pw,
+                startTime: start, endTime: end, date,
+                timestamp: serverTimestamp()
+            });
 
-        modal.style.display = 'none';
-        bookingForm.reset();
-        successMessage.classList.add('visible-message');
-        setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
+            modal.style.display = 'none';
+            bookingForm.reset();
+            successMessage.classList.add('visible-message');
+            setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to book. Check internet or try again.');
+        }
     });
 
     // Delete
@@ -285,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Booking deleted');
     };
 
-    // Modal close
+    // Close modal
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
