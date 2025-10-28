@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return bookings.some(b => timeToMinutes(b.startTime) < end && timeToMinutes(b.endTime) > start);
     };
 
+    // One state object per room
     const state = {};
 
     const initRoom = room => {
@@ -80,18 +81,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const bookedList = document.getElementById(`booked-times-list-${prefix}`);
         const todayBtn = document.querySelector(`.today-btn[data-room="${prefix}"]`);
 
-        let selectedDate = '';
-        let datePickerInstance = flatpickr(dateInput, {
+        // Initialize state for this room
+        state[prefix] = {
+            selectedDate: '',
+            datePickerInstance: null
+        };
+
+        // Flatpickr
+        const dp = flatpickr(dateInput, {
             minDate: "today",
             dateFormat: "Y-m-d",
-            onChange: (sel, str) => {
-                selectedDate = str;
-                fetchBookings(room, str);
+            onChange: (selectedDates, dateStr) => {
+                state[prefix].selectedDate = dateStr;   // Save here
+                fetchBookings(room, dateStr);
             }
         });
-        state[prefix] = { selectedDate, datePickerInstance };
+        state[prefix].datePickerInstance = dp;
 
-        todayBtn.addEventListener('click', () => datePickerInstance.setDate('today', true));
+        todayBtn.addEventListener('click', () => {
+            dp.setDate('today', true);
+            // onChange will fire and update state
+        });
 
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
@@ -104,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const div = document.createElement('div');
                 div.className = 'booked-slot';
                 let status = '';
-                if (selectedDate === todayStr()) {
+                if (state[prefix].selectedDate === todayStr()) {
                     const now = new Date().getHours() * 60 + new Date().getMinutes();
                     const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
                     if (bs <= now && now < be) {
@@ -142,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const curMin = now.getHours() * 60 + now.getMinutes();
             const interval = 30;
 
-            if (selectedDate === today) {
+            if (state[prefix].selectedDate === today) {
                 const nowStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
                 const opt = document.createElement('option');
                 opt.value = nowStr;
@@ -161,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const time = `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
                 const opt = document.createElement('option');
                 opt.value = time; opt.textContent = time;
-                const past = selectedDate === today && mins <= curMin;
+                const past = state[prefix].selectedDate === today && mins <= curMin;
                 const booked = checkOverlap(bookedSlots, time, `${pad(Math.floor((mins + interval) / 60))}:${pad((mins + interval) % 60)}`);
                 if (past || booked) { opt.disabled = true; opt.classList.add('unavailable'); }
                 startSel.appendChild(opt);
@@ -198,9 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         checkBtn.addEventListener('click', () => {
             const start = startSel.value, end = endSel.value;
-            if (!selectedDate) return alert('Select a date');
-            if (!start || !end) return alert('Select start & end time');
-            if (timeToMinutes(end) <= timeToMinutes(start)) return alert('End must be after start');
+            const selectedDate = state[prefix].selectedDate;  // Read from state
+
+            if (!selectedDate) return alert('Please select a date first.');
+            if (!start || !end) return alert('Please select both start and end time.');
+            if (timeToMinutes(end) <= timeToMinutes(start)) return alert('End time must be after start time.');
 
             modalRoomName.textContent = room.name;
             modalTimeSlot.textContent = `Time: ${start} - ${end} on ${selectedDate}`;
@@ -213,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ROOMS.forEach(initRoom);
 
-    // Tab switch
+    // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -224,28 +236,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelector('.tab-btn').click();
 
-    // Confirm Booking – Your Old Logic (Works 100%)
+    // Confirm Booking
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
         const room = ROOMS.find(r => r.id === roomId);
         const col = collection(db, room.collection);
 
-        const name = document.getElementById('name').value;
-        const project = document.getElementById('project').value;
+        const name = document.getElementById('name').value.trim();
+        const project = document.getElementById('project').value.trim();
         const deletePassword = document.getElementById('delete-password').value;
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
-        const bookingDate = state[roomId].selectedDate;
+        const bookingDate = state[roomId].selectedDate;  // Correct date
 
-        if (!bookingDate) return alert('Select a date');
+        if (!bookingDate) return alert('No date selected.');
         if (deletePassword.length < 4) return alert('Password must be 4+ characters');
 
         try {
             const snap = await getDocs(query(col, where('date', '==', bookingDate)));
             const current = snap.docs.map(d => d.data());
             if (checkOverlap(current, startTime, endTime)) {
-                alert('Slot just booked. Try another.');
+                alert('This slot was just booked. Please choose another.');
                 modal.style.display = 'none';
                 return;
             }
@@ -266,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error(err);
-            alert('Failed to book. Try again.');
+            alert('Failed to book. Please try again.');
         }
     });
 
@@ -274,10 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pw.length < 4) return alert('Password too short');
         const docRef = doc(db, room.collection, id);
         const snap = await getDoc(docRef);
-        if (!snap.exists()) return alert('Not found');
+        if (!snap.exists()) return alert('Booking not found');
         if (snap.data().deletePassword !== pw) return alert('Wrong password');
         await deleteDoc(docRef);
-        alert('Deleted');
+        alert('Booking deleted');
     };
 
     closeBtn.onclick = () => modal.style.display = 'none';
