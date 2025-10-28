@@ -19,17 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
 
-    // === ROBUST PASSWORD NORMALIZATION (UNICODE SAFE) ===
+    // === ROBUST PASSWORD NORMALIZATION (UNICODE, INVISIBLE CHARS, CASE, WHITESPACE) ===
     const normalize = (str) => {
         if (typeof str !== 'string') return '';
         return str
-            .normalize('NFKD') // Normalize Unicode (handles accented chars, etc.)
-            .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, '') // Remove non-breaking space, zero-width, BOM
-            .replace(/\s+/g, ' ')     // Collapse all whitespace to single space
+            .normalize('NFKD')
+            .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, '')
+            .replace(/\s+/g, ' ')
             .trim()
             .toLowerCase();
     };
-    // ====================================================
+    // =================================================================================
 
     // Dynamic Room Section Generation
     ROOMS.forEach(room => {
@@ -84,9 +84,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // --- FIXED DELETE BOOKING WITH FULL NORMALIZATION ---
+    // === FIXED DELETE BOOKING WITH ID CAPTURE & DEBUG ===
     const deleteBooking = async (room, id, pw) => {
-        const inputPassword = normalize(pw); // Use same normalization as save
+        console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
+        console.log('Booking ID:', id);
+        console.log('Room collection:', room.collection);
+
+        if (!id) {
+            alert('Error: Booking ID is missing!');
+            return;
+        }
+
+        const inputPassword = normalize(pw);
 
         if (inputPassword.length < 4) {
             return alert('Cancelation failed: Password must be 4 or more characters.');
@@ -97,29 +106,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const snap = await getDoc(docRef);
 
             if (!snap.exists()) {
+                console.log('Document not found in Firestore');
                 return alert('Cancelation failed: Booking not found. It may have already been canceled.');
             }
 
             const storedPassword = normalize(snap.data().deletePassword);
 
-            // DEBUG: Remove these logs later
-            console.log('%cPASSWORD COMPARISON', 'color: orange; font-weight: bold;');
-            console.log('Input (normalized):', JSON.stringify(inputPassword));
-            console.log('Stored (normalized):', JSON.stringify(storedPassword));
+            console.log('Password comparison:', { inputPassword, storedPassword });
 
             if (storedPassword !== inputPassword) {
                 return alert('Cancelation failed: Wrong password.');
             }
 
             await deleteDoc(docRef);
+            console.log('Booking deleted successfully:', id);
             alert('Booking successfully canceled!');
 
         } catch (error) {
             console.error("Error deleting booking:", error);
-            alert('Failed to cancel booking. Please try again or check your console for details.');
+            alert('Failed to cancel booking. Check console for details.');
         }
     };
-    // ------------------------------------------------
+    // ====================================================
 
     const initRoom = room => {
         const prefix = room.id;
@@ -135,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             datePickerInstance: null
         };
 
+        // === FIXED RENDER BOOKED TIMES WITH PROPER CLOSURE ===
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
             if (!bookings.length) {
@@ -177,24 +186,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'delete-btn';
-                deleteButton.dataset.id = b.id;
                 deleteButton.textContent = 'x';
-                
-                // FIXED: Pass raw prompt value (no pre-trim)
+
+                // FIX: Capture b.id IMMEDIATELY in closure
+                const bookingId = b.id;
+                deleteButton.dataset.id = bookingId; // for debugging
+
                 deleteButton.onclick = () => {
                     const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
                     if (pw !== null) {
-                        deleteBooking(room, deleteButton.dataset.id, pw);
+                        deleteBooking(room, bookingId, pw); // Use captured ID
                     }
                 };
-                controlDiv.appendChild(deleteButton);
 
+                controlDiv.appendChild(deleteButton);
                 div.appendChild(timeDiv);
                 div.appendChild(controlDiv);
-
                 bookedList.appendChild(div);
             });
         };
+        // ====================================================
 
         const populateTimeSelectors = bookedSlots => {
             startSel.innerHTML = ''; endSel.innerHTML = '';
@@ -356,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.querySelectorAll('.room-section').forEach(s => s.classList.remove('active'));
             const roomSection = document.getElementById(`section-${btn.dataset.room}`);
-            roomSection.classList.add('active');
+            if (roomSection) roomSection.classList.add('active');
         });
     });
     
@@ -373,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
         const rawPassword = document.getElementById('delete-password').value;
-        const deletePassword = normalize(rawPassword); // Use same normalize as delete
+        const deletePassword = normalize(rawPassword);
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
