@@ -4,7 +4,7 @@ import {
 
 document.addEventListener('DOMContentLoaded', () => {
     const db = window.db;
-    if (!db) return alert("Firebase not loaded.");
+    if (!db) return alert("Firebase not loaded. Please ensure the Firebase initialization script is correct in index.html.");
 
     const roomContent = document.getElementById('room-content');
     const modal = document.getElementById('booking-modal');
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
 
+    // Dynamic Room Section Generation (using the previous structure)
     ROOMS.forEach(room => {
         const section = document.createElement('div');
         section.className = 'room-section';
@@ -71,6 +72,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
+    // --- Core Deletion Function with .trim() Fix ---
+    const deleteBooking = async (room, id, pw) => {
+        // 'pw' is the password entered by the user, already trimmed from the prompt
+        if (pw.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
+        
+        const docRef = doc(db, room.collection, id);
+        try {
+            const snap = await getDoc(docRef);
+            
+            if (!snap.exists()) {
+                return alert('Cancelation failed: Booking not found. It may have already been canceled.');
+            }
+            
+            // CRITICAL FIX: Trim the stored database password before comparison
+            if (snap.data().deletePassword.trim() !== pw) { 
+                return alert('Cancelation failed: Wrong password.');
+            }
+            
+            await deleteDoc(docRef);
+            alert('✅ Booking successfully canceled!');
+            
+        } catch (error) {
+            console.error("Error deleting booking:", error);
+            alert('❌ Failed to cancel booking. Please try again or check your console for details.');
+        }
+    };
+    // ------------------------------------------------
+
     const initRoom = room => {
         const prefix = room.id;
         const dateInput = document.getElementById(`booking-date-${prefix}`);
@@ -96,9 +125,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const div = document.createElement('div');
                 div.className = 'booked-slot';
                 let status = '';
-                if (state[prefix].selectedDate === todayStr()) {
-                    const now = new Date().getHours() * 60 + new Date().getMinutes();
-                    const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
+                const today = todayStr();
+                const now = new Date().getHours() * 60 + new Date().getMinutes();
+                const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
+
+                if (state[prefix].selectedDate === today) {
                     if (bs <= now && now < be) {
                         div.classList.add('ongoing');
                         status = '<span class="status-label status-ongoing">Ongoing</span>';
@@ -127,6 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteButton.className = 'delete-btn';
                 deleteButton.dataset.id = b.id;
                 deleteButton.textContent = 'x';
+                
+                // CRITICAL FIX: Pass the trimmed password from the prompt
                 deleteButton.onclick = () => {
                     const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
                     if (pw !== null) deleteBooking(room, deleteButton.dataset.id, pw.trim());
@@ -239,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        // Flatpickr
+        // Flatpickr initialization
         const dp = flatpickr(dateInput, {
             minDate: "today",
             dateFormat: "Y-m-d",
@@ -250,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         state[prefix].datePickerInstance = dp;
         
-        // Initial call to set today's date and fire onChange
         dp.setDate('today', true);
 
         todayBtn.addEventListener('click', () => {
@@ -298,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ROOMS.forEach(initRoom);
 
-    // Tab switching
+    // Tab switching logic
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -310,14 +342,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    // Initial tab click to show the first room
+    // Initial tab click
     const firstTabBtn = document.querySelector('.tab-btn');
     if (firstTabBtn) {
         firstTabBtn.click();
     }
 
 
-    // Confirm Booking
+    // Confirm Booking Submission
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -326,7 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
-        const deletePassword = document.getElementById('delete-password').value;
+        // CRITICAL FIX: Trim the password when saving it to the database
+        const deletePassword = document.getElementById('delete-password').value.trim(); 
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
@@ -344,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             await addDoc(col, {
-                name, project, deletePassword,
+                name, project, deletePassword, // Save the trimmed password
                 startTime, endTime, date: bookingDate,
                 timestamp: serverTimestamp()
             });
@@ -364,31 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const deleteBooking = async (room, id, pw) => {
-        // **FIXED DELETION LOGIC**
-        if (pw.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
-        
-        const docRef = doc(db, room.collection, id);
-        try {
-            const snap = await getDoc(docRef);
-            
-            if (!snap.exists()) {
-                return alert('Cancelation failed: Booking not found. It may have already been canceled.');
-            }
-            
-            if (snap.data().deletePassword !== pw) {
-                return alert('Cancelation failed: Wrong password.');
-            }
-            
-            await deleteDoc(docRef);
-            alert('✅ Booking successfully canceled!');
-            
-        } catch (error) {
-            console.error("Error deleting booking:", error);
-            alert('❌ Failed to cancel booking. Please try again or check your console for details.');
-        }
-    };
-
+    // Modal Control
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
