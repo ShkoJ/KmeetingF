@@ -1,6 +1,5 @@
 import { 
-    collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, 
-    serverTimestamp, updateDoc 
+    collection, addDoc, getDocs, query, where, onSnapshot, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,18 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'downstairs', name: 'Minara (منارە)', collection: 'bookings_downstairs' },
         { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
-
-    // === ROBUST PASSWORD NORMALIZATION ===
-    const normalize = (str) => {
-        if (typeof str !== 'string') return '';
-        return str
-            .normalize('NFKD')
-            .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-    };
-    // ====================================
 
     // Dynamic Room Section Generation
     ROOMS.forEach(room => {
@@ -85,45 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // === FINAL DELETE BOOKING WITH updateDoc + SECURE RULES ===
-    const deleteBooking = async (room, id, pw) => {
-        console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
-        console.log('Booking ID:', id);
-
-        if (!id) {
-            alert('Error: Booking ID is missing!');
-            return;
-        }
-
-        const inputPassword = normalize(pw);
-        if (inputPassword.length < 4) {
-            return alert('Cancelation failed: Password must be 4 or more characters.');
-        }
-
-        const docRef = doc(db, room.collection, id);
-
-        try {
-            // Step 1: Validate password via updateDoc (Firestore rules check)
-            await updateDoc(docRef, { 
-                clientDeleteAttemptPassword: inputPassword 
-            });
-
-            // Step 2: Password correct → delete document
-            await deleteDoc(docRef);
-            alert('Booking successfully canceled!');
-
-        } catch (error) {
-            console.error("Delete failed:", error);
-
-            if (error.code === 'permission-denied') {
-                alert('Cancelation failed: Wrong password.');
-            } else {
-                alert('Failed to cancel. Check console for details.');
-            }
-        }
-    };
-    // ========================================================
-
     const initRoom = room => {
         const prefix = room.id;
         const dateInput = document.getElementById(`booking-date-${prefix}`);
@@ -177,22 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const controlDiv = document.createElement('div');
                 controlDiv.innerHTML = status;
-                
-                const deleteButton = document.createElement('button');
-                deleteButton.className = 'delete-btn';
-                deleteButton.textContent = 'x';
 
-                const bookingId = b.id;
-                deleteButton.dataset.id = bookingId;
-
-                deleteButton.onclick = () => {
-                    const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
-                    if (pw !== null) {
-                        deleteBooking(room, bookingId, pw);
-                    }
-                };
-
-                controlDiv.appendChild(deleteButton);
                 div.appendChild(timeDiv);
                 div.appendChild(controlDiv);
                 bookedList.appendChild(div);
@@ -365,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const firstTabBtn = document.querySelector('.tab-btn');
     if (firstTabBtn) firstTabBtn.click();
 
-    // === BOOKING SUBMISSION WITH NORMALIZE ===
+    // BOOKING SUBMISSION (NO PASSWORD SAVED)
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -374,14 +307,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
-        const rawPassword = document.getElementById('delete-password').value;
-        const deletePassword = normalize(rawPassword);
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
 
         if (!bookingDate) return alert('No date selected.');
-        if (deletePassword.length < 4) return alert('Password must be 4+ characters');
 
         try {
             const snap = await getDocs(query(col, where('date', '==', bookingDate)));
@@ -393,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             await addDoc(col, {
-                name, project, deletePassword,
+                name, project,
                 startTime, endTime, date: bookingDate,
                 timestamp: serverTimestamp()
             });
@@ -401,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modal.style.display = 'none';
             document.getElementById('name').value = '';
             document.getElementById('project').value = '';
-            document.getElementById('delete-password').value = '';
 
             successMessage.classList.add('visible-message');
             setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
@@ -411,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Failed to book. Please try again.');
         }
     });
-    // =========================================
 
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
