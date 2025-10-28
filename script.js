@@ -1,6 +1,6 @@
 import { 
     collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, 
-    serverTimestamp, setDoc 
+    serverTimestamp, updateDoc 
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -85,43 +85,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // === FIXED DELETE BOOKING WITH setDoc + RULES WORKAROUND ===
+    // === FINAL DELETE BOOKING WITH updateDoc + SECURE RULES ===
     const deleteBooking = async (room, id, pw) => {
-    console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
-    console.log('Booking ID:', id);
+        console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
+        console.log('Booking ID:', id);
 
-    if (!id) {
-        alert('Error: Booking ID is missing!');
-        return;
-    }
-
-    const inputPassword = normalize(pw);
-    if (inputPassword.length < 4) {
-        return alert('Cancelation failed: Password must be 4 or more characters.');
-    }
-
-    const docRef = doc(db, room.collection, id);
-
-    try {
-        // Use updateDoc → only sends the dummy field
-        await updateDoc(docRef, { 
-            clientDeleteAttemptPassword: inputPassword 
-        });
-
-        // If we get here → password correct → delete
-        await deleteDoc(docRef);
-        alert('Booking successfully canceled!');
-
-    } catch (error) {
-        console.error("Delete failed:", error);
-
-        if (error.code === 'permission-denied') {
-            alert('Cancelation failed: Wrong password.');
-        } else {
-            alert('Failed to cancel. Check console.');
+        if (!id) {
+            alert('Error: Booking ID is missing!');
+            return;
         }
-    }
-};
+
+        const inputPassword = normalize(pw);
+        if (inputPassword.length < 4) {
+            return alert('Cancelation failed: Password must be 4 or more characters.');
+        }
+
+        const docRef = doc(db, room.collection, id);
+
+        try {
+            // Step 1: Validate password via updateDoc (Firestore rules check)
+            await updateDoc(docRef, { 
+                clientDeleteAttemptPassword: inputPassword 
+            });
+
+            // Step 2: Password correct → delete document
+            await deleteDoc(docRef);
+            alert('Booking successfully canceled!');
+
+        } catch (error) {
+            console.error("Delete failed:", error);
+
+            if (error.code === 'permission-denied') {
+                alert('Cancelation failed: Wrong password.');
+            } else {
+                alert('Failed to cancel. Check console for details.');
+            }
+        }
+    };
     // ========================================================
 
     const initRoom = room => {
@@ -138,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
             datePickerInstance: null
         };
 
-        // === FIXED RENDER WITH CLOSURE-SAFE ID ===
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
             if (!bookings.length) {
@@ -183,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteButton.className = 'delete-btn';
                 deleteButton.textContent = 'x';
 
-                // Capture ID immediately
                 const bookingId = b.id;
                 deleteButton.dataset.id = bookingId;
 
@@ -200,7 +198,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 bookedList.appendChild(div);
             });
         };
-        // =========================================
 
         const populateTimeSelectors = bookedSlots => {
             startSel.innerHTML = ''; endSel.innerHTML = '';
@@ -390,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const snap = await getDocs(query(col, where('date', '==', bookingDate)));
             const current = snap.docs.map(d => d.data());
             if (checkOverlap(current, startTime, endTime)) {
-                alert('This slot was just booked by someone else. Please choose another.');
+                alert('This slot was just booked by someone else. Please choose another time.');
                 modal.style.display = 'none';
                 return;
             }
@@ -419,4 +416,3 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
-
