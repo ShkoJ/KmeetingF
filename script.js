@@ -19,7 +19,19 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
 
-    // Dynamic Room Section Generation (using the previous structure)
+    // === ROBUST PASSWORD NORMALIZATION (UNICODE SAFE) ===
+    const normalize = (str) => {
+        if (typeof str !== 'string') return '';
+        return str
+            .normalize('NFKD') // Normalize Unicode (handles accented chars, etc.)
+            .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, '') // Remove non-breaking space, zero-width, BOM
+            .replace(/\s+/g, ' ')     // Collapse all whitespace to single space
+            .trim()
+            .toLowerCase();
+    };
+    // ====================================================
+
+    // Dynamic Room Section Generation
     ROOMS.forEach(room => {
         const section = document.createElement('div');
         section.className = 'room-section';
@@ -72,34 +84,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // --- Core Deletion Function with Case-Insensitive Fix ---
+    // --- FIXED DELETE BOOKING WITH FULL NORMALIZATION ---
     const deleteBooking = async (room, id, pw) => {
-        // 'pw' is the password entered by the user
-        const inputPassword = pw.trim().toLowerCase(); // Normalize input password for comparison
-        
-        if (inputPassword.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
-        
-        const docRef = doc(db, room.collection, id); 
+        const inputPassword = normalize(pw); // Use same normalization as save
+
+        if (inputPassword.length < 4) {
+            return alert('Cancelation failed: Password must be 4 or more characters.');
+        }
+
+        const docRef = doc(db, room.collection, id);
         try {
             const snap = await getDoc(docRef);
-            
+
             if (!snap.exists()) {
                 return alert('Cancelation failed: Booking not found. It may have already been canceled.');
             }
-            
-            // CRITICAL FIX: Normalize stored password for case-insensitive comparison
-            const storedPassword = snap.data().deletePassword.trim().toLowerCase(); 
-            
-            if (storedPassword !== inputPassword) { 
-                return alert('Cancelation failed: Wrong password.'); 
+
+            const storedPassword = normalize(snap.data().deletePassword);
+
+            // DEBUG: Remove these logs later
+            console.log('%cPASSWORD COMPARISON', 'color: orange; font-weight: bold;');
+            console.log('Input (normalized):', JSON.stringify(inputPassword));
+            console.log('Stored (normalized):', JSON.stringify(storedPassword));
+
+            if (storedPassword !== inputPassword) {
+                return alert('Cancelation failed: Wrong password.');
             }
-            
+
             await deleteDoc(docRef);
-            alert('✅ Booking successfully canceled!');
-            
+            alert('Booking successfully canceled!');
+
         } catch (error) {
             console.error("Error deleting booking:", error);
-            alert('❌ Failed to cancel booking. Please try again or check your console for details.');
+            alert('Failed to cancel booking. Please try again or check your console for details.');
         }
     };
     // ------------------------------------------------
@@ -163,9 +180,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteButton.dataset.id = b.id;
                 deleteButton.textContent = 'x';
                 
+                // FIXED: Pass raw prompt value (no pre-trim)
                 deleteButton.onclick = () => {
                     const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
-                    if (pw !== null) deleteBooking(room, deleteButton.dataset.id, pw.trim());
+                    if (pw !== null) {
+                        deleteBooking(room, deleteButton.dataset.id, pw);
+                    }
                 };
                 controlDiv.appendChild(deleteButton);
 
@@ -203,13 +223,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.appendChild(opt);
             };
 
-            // Start Time Selector Population
             for (let i = 0; i < 24 * 60 / interval; i++) {
                 const mins = i * interval;
                 addOption(startSel, mins, true);
             }
             
-            // Add 'Now' option
             if (state[prefix].selectedDate === today) {
                 const nowMins = Math.ceil((now.getHours() * 60 + now.getMinutes()) / interval) * interval;
                 if (nowMins < timeToMinutes('24:00')) {
@@ -227,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     startSel.prepend(opt); 
                 }
             }
-            
 
             const updateEnd = () => {
                 endSel.innerHTML = '';
@@ -275,7 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        // Flatpickr initialization
         const dp = flatpickr(dateInput, {
             minDate: "today",
             dateFormat: "Y-m-d",
@@ -292,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dp.setDate('today', true);
         });
 
-        // Pre-booking check
         checkBtn.addEventListener('click', async () => {
             const start = startSel.value, end = endSel.value;
             const selectedDate = state[prefix].selectedDate; 
@@ -345,14 +360,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    // Initial tab click
     const firstTabBtn = document.querySelector('.tab-btn');
-    if (firstTabBtn) {
-        firstTabBtn.click();
-    }
+    if (firstTabBtn) firstTabBtn.click();
 
-
-    // Confirm Booking Submission
+    // === FIXED BOOKING SUBMISSION WITH NORMALIZE ===
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -361,8 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
-        // CRITICAL FIX: Trim and convert the password to lowercase when saving it to the database
-        const deletePassword = document.getElementById('delete-password').value.trim().toLowerCase(); 
+        const rawPassword = document.getElementById('delete-password').value;
+        const deletePassword = normalize(rawPassword); // Use same normalize as delete
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
@@ -380,13 +391,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             await addDoc(col, {
-                name, project, deletePassword, // Save the trimmed, lowercase password
+                name, project, deletePassword,
                 startTime, endTime, date: bookingDate,
                 timestamp: serverTimestamp()
             });
 
             modal.style.display = 'none';
-            // Clear form fields after successful booking
             document.getElementById('name').value = '';
             document.getElementById('project').value = '';
             document.getElementById('delete-password').value = '';
@@ -399,8 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Failed to book. Please try again.');
         }
     });
+    // ===============================================
 
-    // Modal Control
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
