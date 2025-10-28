@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const ROOMS = [
         { id: 'downstairs', name: 'Minara (منارە)', collection: 'bookings_downstairs' },
-        { id: 'upstairs',   name: 'Qala (قەڵا)',     collection: 'bookings_upstairs' }
+        { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
 
     ROOMS.forEach(room => {
@@ -66,10 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const checkOverlap = (bookings, s, e) => {
         const start = timeToMinutes(s), end = timeToMinutes(e);
+        // An existing booking overlaps if its start is before our end AND its end is after our start.
         return bookings.some(b => timeToMinutes(b.startTime) < end && timeToMinutes(b.endTime) > start);
     };
 
-    // One state object per room
     const state = {};
 
     const initRoom = room => {
@@ -81,32 +81,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const bookedList = document.getElementById(`booked-times-list-${prefix}`);
         const todayBtn = document.querySelector(`.today-btn[data-room="${prefix}"]`);
 
-        // Initialize state for this room
         state[prefix] = {
             selectedDate: '',
             datePickerInstance: null
         };
 
-        // Flatpickr
-        const dp = flatpickr(dateInput, {
-            minDate: "today",
-            dateFormat: "Y-m-d",
-            onChange: (selectedDates, dateStr) => {
-                state[prefix].selectedDate = dateStr;   // Save here
-                fetchBookings(room, dateStr);
-            }
-        });
-        state[prefix].datePickerInstance = dp;
-
-        todayBtn.addEventListener('click', () => {
-            dp.setDate('today', true);
-            // onChange will fire and update state
-        });
-
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
             if (!bookings.length) {
-                bookedList.innerHTML = '<p style="text-align:center;">No bookings for this date. All clear!</p>';
+                bookedList.innerHTML = '<p style="text-align:center; color: #27ae60;">No bookings for this date. All clear!</p>';
                 return;
             }
             bookings.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
@@ -114,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const div = document.createElement('div');
                 div.className = 'booked-slot';
                 let status = '';
+                // **FIX: Use state[prefix].selectedDate for status logic**
                 if (state[prefix].selectedDate === todayStr()) {
                     const now = new Date().getHours() * 60 + new Date().getMinutes();
                     const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
@@ -122,7 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         status = '<span class="status-label status-ongoing">Ongoing</span>';
                     } else if (be <= now) {
                         div.classList.add('done');
-                        status = '<span class="status-label">Done</span>';
+                        // Status label for done items is not explicitly styled in your CSS but we keep the logic
+                        status = '<span class="status-label" style="background: #95a5a6;">Done</span>'; 
                     } else {
                         div.classList.add('upcoming');
                         status = '<span class="status-label status-upcoming">Upcoming</span>';
@@ -150,76 +135,166 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             const today = todayStr();
             const curMin = now.getHours() * 60 + now.getMinutes();
-            const interval = 30;
+            const interval = 30; // 30 minute intervals
 
-            if (state[prefix].selectedDate === today) {
-                const nowStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                const opt = document.createElement('option');
-                opt.value = nowStr;
-                opt.textContent = `Now (${nowStr})`;
-                opt.classList.add('now-option');
-                const checkEnd = `${pad(now.getHours())}:${pad(now.getMinutes() + 1)}`;
-                if (checkOverlap(bookedSlots, nowStr, checkEnd)) {
-                    opt.disabled = true;
-                    opt.classList.add('unavailable');
-                }
-                startSel.appendChild(opt);
-            }
-
-            for (let i = 0; i < 24 * 60 / interval; i++) {
-                const mins = i * interval;
+            const addOption = (select, mins, isStart) => {
                 const time = `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
                 const opt = document.createElement('option');
                 opt.value = time; opt.textContent = time;
-                const past = state[prefix].selectedDate === today && mins <= curMin;
-                const booked = checkOverlap(bookedSlots, time, `${pad(Math.floor((mins + interval) / 60))}:${pad((mins + interval) % 60)}`);
-                if (past || booked) { opt.disabled = true; opt.classList.add('unavailable'); }
-                startSel.appendChild(opt);
+                
+                let isBooked = false;
+                // Check if this time slot (from time to time+interval) is booked
+                if (isStart) {
+                    const nextTime = `${pad(Math.floor((mins + interval) / 60))}:${pad((mins + interval) % 60)}`;
+                    isBooked = checkOverlap(bookedSlots, time, nextTime);
+                }
+                
+                const isPast = state[prefix].selectedDate === today && mins < curMin;
+                
+                if (isPast || isBooked) { 
+                    opt.disabled = true; 
+                    opt.classList.add('unavailable'); 
+                }
+                select.appendChild(opt);
+            };
+
+            // Start Time Selector Population
+            for (let i = 0; i < 24 * 60 / interval; i++) {
+                const mins = i * interval;
+                addOption(startSel, mins, true);
             }
+            
+            // Add 'Now' option for today's date
+            if (state[prefix].selectedDate === today) {
+                const nowMins = now.getHours() * 60 + Math.ceil(now.getMinutes() / interval) * interval;
+                const nowTime = `${pad(Math.floor(nowMins / 60))}:${pad(nowMins % 60)}`;
+                if (timeToMinutes(nowTime) < timeToMinutes('24:00')) {
+                    const opt = document.createElement('option');
+                    opt.value = nowTime;
+                    opt.textContent = `Start Now (${nowTime})`;
+                    opt.classList.add('now-option');
+                    
+                    const nextTime = `${pad(Math.floor((nowMins + interval) / 60))}:${pad((nowMins + interval) % 60)}`;
+                    if (checkOverlap(bookedSlots, nowTime, nextTime)) {
+                        opt.disabled = true;
+                        opt.classList.add('unavailable');
+                    }
+                    startSel.prepend(opt); // Prepend so it's the first available option
+                }
+            }
+            
 
             const updateEnd = () => {
                 endSel.innerHTML = '';
                 const s = startSel.value;
-                if (!s) return;
-                const startMins = timeToMinutes(s);
+                if (!s || startSel.selectedOptions[0].disabled) return; // Don't allow selecting an unavailable start time
+                
+                // Get the minutes of the selected START time
+                const startMins = timeToMinutes(s); 
+                
+                // Iterate from one interval *after* the selected start time
+                // i starts from the next slot index (i.e., if start is 10:00, next slot is 10:30)
                 for (let i = Math.ceil(startMins / interval) + 1; i <= 24 * 60 / interval; i++) {
                     const mins = i * interval;
                     const time = `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
                     const opt = document.createElement('option');
                     opt.value = time; opt.textContent = time;
-                    if (checkOverlap(bookedSlots, s, time)) { opt.disabled = true; opt.classList.add('unavailable'); }
+                    
+                    // Check overlap from selected start time (s) up to this potential end time (time)
+                    if (checkOverlap(bookedSlots, s, time)) { 
+                        opt.disabled = true; 
+                        opt.classList.add('unavailable'); 
+                        // UX improvement: break loop after first unavailable end time to prevent booking past it.
+                        // However, just disabling is safer.
+                    }
                     endSel.appendChild(opt);
                 }
+                // Select the first available end time automatically
+                endSel.value = endSel.querySelector('option:not(:disabled)') ? endSel.querySelector('option:not(:disabled)').value : '';
             };
+            
+            startSel.removeEventListener('change', updateEnd); // Prevent multiple listeners
             startSel.addEventListener('change', updateEnd);
             updateEnd();
         };
 
         const fetchBookings = date => {
-            if (!date) return;
+            // **FIX 1: Ensure date is present**
+            if (!date) {
+                bookedList.innerHTML = '<p>Select a date to view bookings.</p>';
+                populateTimeSelectors([]);
+                return;
+            }
             const q = query(collection(db, room.collection), where('date', '==', date));
+            
+            // onSnapshot provides real-time updates!
             onSnapshot(q, snap => {
                 const bookings = [];
                 snap.forEach(doc => bookings.push({ ...doc.data(), id: doc.id }));
                 renderBookedTimes(bookings);
-                populateTimeSelectors(bookings);
+                populateTimeSelectors(bookings); // **CRUCIAL: Re-populate selectors with new bookings**
             });
         };
 
-        checkBtn.addEventListener('click', () => {
+        // Flatpickr
+        const dp = flatpickr(dateInput, {
+            minDate: "today",
+            dateFormat: "Y-m-d",
+            // **FIX 1: onChange is the primary data fetching trigger**
+            onChange: (selectedDates, dateStr) => {
+                state[prefix].selectedDate = dateStr; 
+                fetchBookings(dateStr);
+            }
+        });
+        state[prefix].datePickerInstance = dp;
+        
+        // **FIX 1: Initial call to set today's date and fire onChange**
+        dp.setDate('today', true);
+
+        todayBtn.addEventListener('click', () => {
+            dp.setDate('today', true);
+        });
+
+        // **FIX 2: Perform check *before* showing the modal**
+        checkBtn.addEventListener('click', async () => {
             const start = startSel.value, end = endSel.value;
-            const selectedDate = state[prefix].selectedDate;  // Read from state
+            const selectedDate = state[prefix].selectedDate; 
 
             if (!selectedDate) return alert('Please select a date first.');
+            // Prevent booking if selected option is disabled (a booked slot)
+            if (startSel.selectedOptions[0].disabled || endSel.selectedOptions[0].disabled) {
+                 return alert('The selected start or end time is already booked. Please choose another.');
+            }
             if (!start || !end) return alert('Please select both start and end time.');
             if (timeToMinutes(end) <= timeToMinutes(start)) return alert('End time must be after start time.');
 
-            modalRoomName.textContent = room.name;
-            modalTimeSlot.textContent = `Time: ${start} - ${end} on ${selectedDate}`;
-            bookingForm.dataset.startTime = start;
-            bookingForm.dataset.endTime = end;
-            bookingForm.dataset.room = prefix;
-            modal.style.display = 'flex';
+            // Pre-booking check (redundant but essential real-time check)
+            const roomData = ROOMS.find(r => r.id === prefix);
+            const col = collection(db, roomData.collection);
+            
+            try {
+                const snap = await getDocs(query(col, where('date', '==', selectedDate)));
+                const currentBookings = snap.docs.map(d => d.data());
+                
+                if (checkOverlap(currentBookings, start, end)) {
+                    alert('This slot was just booked or is unavailable. Please choose another time.');
+                    // Re-fetch to update the time selectors based on the latest data
+                    fetchBookings(selectedDate); 
+                    return; 
+                }
+
+                // If available, proceed to show modal
+                modalRoomName.textContent = room.name;
+                modalTimeSlot.textContent = `Time: ${start} - ${end} on ${selectedDate}`;
+                bookingForm.dataset.startTime = start;
+                bookingForm.dataset.endTime = end;
+                bookingForm.dataset.room = prefix;
+                modal.style.display = 'flex';
+                
+            } catch (err) {
+                console.error("Error during pre-booking check:", err);
+                alert('An error occurred during availability check. Please try again.');
+            }
         });
     };
 
@@ -230,11 +305,31 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            
+            // **FIX 3: Ensure the room section is active when the tab is clicked**
             document.querySelectorAll('.room-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`section-${btn.dataset.room}`).classList.add('active');
+            const roomSection = document.getElementById(`section-${btn.dataset.room}`);
+            roomSection.classList.add('active');
+
+            // Force a re-fetch for the newly active room if the date is already set
+            const roomId = btn.dataset.room;
+            if (state[roomId] && state[roomId].selectedDate) {
+                // We don't call dp.setDate here because it would reset the time selections,
+                // but onSnapshot will re-run when the room's data is first loaded (which should happen 
+                // on initial page load thanks to the initRoom fix). 
+                // A quick fix to ensure the active room loads its data again on tab switch 
+                // is to manually trigger the data load function if needed, but the Flatpickr 
+                // init should cover the first load. Let's rely on the init fix for now.
+            }
         });
     });
-    document.querySelector('.tab-btn').click();
+    
+    // Initial tab click to show the first room
+    const firstTabBtn = document.querySelector('.tab-btn');
+    if (firstTabBtn) {
+        firstTabBtn.click();
+    }
+
 
     // Confirm Booking
     bookingForm.addEventListener('submit', async e => {
@@ -248,16 +343,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const deletePassword = document.getElementById('delete-password').value;
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
-        const bookingDate = state[roomId].selectedDate;  // Correct date
+        const bookingDate = state[roomId].selectedDate; 
 
         if (!bookingDate) return alert('No date selected.');
         if (deletePassword.length < 4) return alert('Password must be 4+ characters');
 
+        // Final check for overlap right before saving (race condition protection)
         try {
             const snap = await getDocs(query(col, where('date', '==', bookingDate)));
             const current = snap.docs.map(d => d.data());
             if (checkOverlap(current, startTime, endTime)) {
-                alert('This slot was just booked. Please choose another.');
+                alert('This slot was just booked by someone else. Please choose another.');
                 modal.style.display = 'none';
                 return;
             }
@@ -285,11 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteBooking = async (room, id, pw) => {
         if (pw.length < 4) return alert('Password too short');
         const docRef = doc(db, room.collection, id);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) return alert('Booking not found');
-        if (snap.data().deletePassword !== pw) return alert('Wrong password');
-        await deleteDoc(docRef);
-        alert('Booking deleted');
+        try {
+            const snap = await getDoc(docRef);
+            if (!snap.exists()) return alert('Booking not found');
+            if (snap.data().deletePassword !== pw) return alert('Wrong password');
+            await deleteDoc(docRef);
+            alert('Booking deleted successfully!');
+        } catch (error) {
+            console.error("Error deleting booking:", error);
+            alert('Failed to delete booking. Please check your connection.');
+        }
     };
 
     closeBtn.onclick = () => modal.style.display = 'none';
