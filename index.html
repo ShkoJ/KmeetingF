@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KF Meeting Rooms</title>
+    <link rel="icon" type="image/jpeg" href="kf_logo.jpg">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header-section">
+            <img src="kf_logo.jpg" alt="KF Logo" class="logo">
+            <h1>Meeting Room Booking</h1>
+            <p id="success-message" class="hidden-message">Booking confirmed</p>
+        </div>
+
+        <!-- Updated Fun Names -->
+        <div class="tab-header">
+            <button class="tab-btn active" data-room="downstairs">
+                <img src="booking_downstairs.jpg" alt="Minara" class="tab-img">
+                <span>منارە</span>
+            </button>
+            <button class="tab-btn" data-room="upstairs">
+                <img src="booking_upstairs.jpg" alt="Qala" class="tab-img">
+                <span>قەڵا</span>
+            </button>
+        </div>
+
+        <div id="room-content"></div>
+    </div>
+
+    <!-- Modal -->
+    <div id="booking-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">×</span>
+            <h2>Confirm Booking <span id="modal-room-name"></span></h2>
+            <p id="modal-time-slot"></p>
+            <form id="booking-form">
+                <div class="form-group">
+                    <label for="name">Your Name</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="project">Project / Subsidiary</label>
+                    <input type="text" id="project" required>
+                </div>
+                <div class="form-group">
+                    <label for="delete-password">Cancel Password</label>
+                    <input type="password" id="delete-password" required minlength="4">
+                </div>
+                <button type="submit">Confirm</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDAA9dcHLGgZWfH6FzHqj1EO5pkOz5A778",
+            authDomain: "booking-kf-double.firebaseapp.com",
+            projectId: "booking-kf-double",
+            storageBucket: "booking-kf-double.firebasestorage.app",
+            messagingSenderId: "239605713305",
+            appId: "1:239605713305:web:ff09d82613af32d2f22b08",
+            measurementId: "G-FXMKHMMSDB"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
