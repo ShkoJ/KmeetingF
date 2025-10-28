@@ -1,5 +1,6 @@
 import { 
-    collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, serverTimestamp 
+    collection, addDoc, deleteDoc, doc, getDoc, getDocs, query, where, onSnapshot, 
+    serverTimestamp, setDoc 
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'upstairs',   name: 'Qala (قەڵا)',      collection: 'bookings_upstairs' }
     ];
 
-    // === ROBUST PASSWORD NORMALIZATION (UNICODE, INVISIBLE CHARS, CASE, WHITESPACE) ===
+    // === ROBUST PASSWORD NORMALIZATION ===
     const normalize = (str) => {
         if (typeof str !== 'string') return '';
         return str
@@ -29,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .trim()
             .toLowerCase();
     };
-    // =================================================================================
+    // ====================================
 
     // Dynamic Room Section Generation
     ROOMS.forEach(room => {
@@ -84,11 +85,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const state = {};
 
-    // === FIXED DELETE BOOKING WITH ID CAPTURE & DEBUG ===
+    // === FIXED DELETE BOOKING WITH setDoc + RULES WORKAROUND ===
     const deleteBooking = async (room, id, pw) => {
         console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
         console.log('Booking ID:', id);
-        console.log('Room collection:', room.collection);
 
         if (!id) {
             alert('Error: Booking ID is missing!');
@@ -96,38 +96,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const inputPassword = normalize(pw);
-
         if (inputPassword.length < 4) {
             return alert('Cancelation failed: Password must be 4 or more characters.');
         }
 
         const docRef = doc(db, room.collection, id);
+
         try {
-            const snap = await getDoc(docRef);
+            // Step 1: Write dummy field to validate password via Firestore rules
+            await setDoc(docRef, { 
+                clientDeleteAttemptPassword: inputPassword 
+            }, { merge: true });
 
-            if (!snap.exists()) {
-                console.log('Document not found in Firestore');
-                return alert('Cancelation failed: Booking not found. It may have already been canceled.');
-            }
-
-            const storedPassword = normalize(snap.data().deletePassword);
-
-            console.log('Password comparison:', { inputPassword, storedPassword });
-
-            if (storedPassword !== inputPassword) {
-                return alert('Cancelation failed: Wrong password.');
-            }
-
+            // Step 2: If we get here → password correct → delete
             await deleteDoc(docRef);
-            console.log('Booking deleted successfully:', id);
             alert('Booking successfully canceled!');
 
         } catch (error) {
-            console.error("Error deleting booking:", error);
-            alert('Failed to cancel booking. Check console for details.');
+            console.error("Delete failed:", error);
+
+            if (error.code === 'permission-denied') {
+                try {
+                    const snap = await getDoc(docRef);
+                    if (snap.exists()) {
+                        const stored = normalize(snap.data().deletePassword);
+                        if (stored !== inputPassword) {
+                            alert('Cancelation failed: Wrong password.');
+                        } else {
+                            alert('Access denied. Please try again.');
+                        }
+                    } else {
+                        alert('Booking not found.');
+                    }
+                } catch {
+                    alert('Cancelation failed: Wrong password or access denied.');
+                }
+            } else {
+                alert('Failed to cancel. Check console.');
+            }
         }
     };
-    // ====================================================
+    // ========================================================
 
     const initRoom = room => {
         const prefix = room.id;
@@ -143,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             datePickerInstance: null
         };
 
-        // === FIXED RENDER BOOKED TIMES WITH PROPER CLOSURE ===
+        // === FIXED RENDER WITH CLOSURE-SAFE ID ===
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
             if (!bookings.length) {
@@ -188,14 +197,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteButton.className = 'delete-btn';
                 deleteButton.textContent = 'x';
 
-                // FIX: Capture b.id IMMEDIATELY in closure
+                // Capture ID immediately
                 const bookingId = b.id;
-                deleteButton.dataset.id = bookingId; // for debugging
+                deleteButton.dataset.id = bookingId;
 
                 deleteButton.onclick = () => {
                     const pw = prompt(`Enter cancelation password for ${b.startTime}-${b.endTime} meeting:`);
                     if (pw !== null) {
-                        deleteBooking(room, bookingId, pw); // Use captured ID
+                        deleteBooking(room, bookingId, pw);
                     }
                 };
 
@@ -205,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bookedList.appendChild(div);
             });
         };
-        // ====================================================
+        // =========================================
 
         const populateTimeSelectors = bookedSlots => {
             startSel.innerHTML = ''; endSel.innerHTML = '';
@@ -359,12 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ROOMS.forEach(initRoom);
 
-    // Tab switching logic
+    // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
             document.querySelectorAll('.room-section').forEach(s => s.classList.remove('active'));
             const roomSection = document.getElementById(`section-${btn.dataset.room}`);
             if (roomSection) roomSection.classList.add('active');
@@ -374,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const firstTabBtn = document.querySelector('.tab-btn');
     if (firstTabBtn) firstTabBtn.click();
 
-    // === FIXED BOOKING SUBMISSION WITH NORMALIZE ===
+    // === BOOKING SUBMISSION WITH NORMALIZE ===
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -420,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Failed to book. Please try again.');
         }
     });
-    // ===============================================
+    // =========================================
 
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
