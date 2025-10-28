@@ -396,3 +396,30 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
+const deleteBooking = async (room, id, pw) => {
+        if (pw.length < 4) return alert('Cancelation failed: Password must be 4 or more characters.');
+        
+        const docRef = doc(db, room.collection, id);
+        try {
+            const snap = await getDoc(docRef);
+            
+            if (!snap.exists()) {
+                return alert('Cancelation failed: Booking not found. It may have already been canceled.');
+            }
+            
+            // Explicitly check the password
+            if (snap.data().deletePassword !== pw) {
+                return alert('Cancelation failed: Wrong password.');
+            }
+            
+            // Password is correct, proceed with deletion
+            await deleteDoc(docRef);
+            // We rely on the onSnapshot listener to automatically update the UI after this!
+            alert('✅ Booking successfully canceled!');
+            
+        } catch (error) {
+            console.error("Error deleting booking:", error);
+            alert('❌ Failed to cancel booking. Please try again or check your console for details.');
+        }
+    };
+
