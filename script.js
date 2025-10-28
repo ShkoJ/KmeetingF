@@ -87,55 +87,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === FIXED DELETE BOOKING WITH setDoc + RULES WORKAROUND ===
     const deleteBooking = async (room, id, pw) => {
-        console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
-        console.log('Booking ID:', id);
+    console.log('%cDELETE BOOKING ATTEMPT', 'color: red; font-weight: bold;');
+    console.log('Booking ID:', id);
 
-        if (!id) {
-            alert('Error: Booking ID is missing!');
-            return;
+    if (!id) {
+        alert('Error: Booking ID is missing!');
+        return;
+    }
+
+    const inputPassword = normalize(pw);
+    if (inputPassword.length < 4) {
+        return alert('Cancelation failed: Password must be 4 or more characters.');
+    }
+
+    const docRef = doc(db, room.collection, id);
+
+    try {
+        // Use updateDoc → only sends the dummy field
+        await updateDoc(docRef, { 
+            clientDeleteAttemptPassword: inputPassword 
+        });
+
+        // If we get here → password correct → delete
+        await deleteDoc(docRef);
+        alert('Booking successfully canceled!');
+
+    } catch (error) {
+        console.error("Delete failed:", error);
+
+        if (error.code === 'permission-denied') {
+            alert('Cancelation failed: Wrong password.');
+        } else {
+            alert('Failed to cancel. Check console.');
         }
-
-        const inputPassword = normalize(pw);
-        if (inputPassword.length < 4) {
-            return alert('Cancelation failed: Password must be 4 or more characters.');
-        }
-
-        const docRef = doc(db, room.collection, id);
-
-        try {
-            // Step 1: Write dummy field to validate password via Firestore rules
-            await setDoc(docRef, { 
-                clientDeleteAttemptPassword: inputPassword 
-            }, { merge: true });
-
-            // Step 2: If we get here → password correct → delete
-            await deleteDoc(docRef);
-            alert('Booking successfully canceled!');
-
-        } catch (error) {
-            console.error("Delete failed:", error);
-
-            if (error.code === 'permission-denied') {
-                try {
-                    const snap = await getDoc(docRef);
-                    if (snap.exists()) {
-                        const stored = normalize(snap.data().deletePassword);
-                        if (stored !== inputPassword) {
-                            alert('Cancelation failed: Wrong password.');
-                        } else {
-                            alert('Access denied. Please try again.');
-                        }
-                    } else {
-                        alert('Booking not found.');
-                    }
-                } catch {
-                    alert('Cancelation failed: Wrong password or access denied.');
-                }
-            } else {
-                alert('Failed to cancel. Check console.');
-            }
-        }
-    };
+    }
+};
     // ========================================================
 
     const initRoom = room => {
@@ -433,3 +419,4 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
+
