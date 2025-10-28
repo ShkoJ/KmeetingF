@@ -10,14 +10,12 @@
 </head>
 <body>
     <div class="container">
-        <!-- White Header -->
         <div class="header-section">
             <img src="kf_logo.jpg" alt="KF Logo" class="logo">
             <h1>Meeting Room Booking</h1>
             <p id="success-message" class="hidden-message">Booking confirmed</p>
         </div>
 
-        <!-- Fun Room Names -->
         <div class="tab-header">
             <button class="tab-btn active" data-room="downstairs">
                 <img src="booking_downstairs.jpg" alt="Minara" class="tab-img">
@@ -32,7 +30,6 @@
         <div id="room-content"></div>
     </div>
 
-    <!-- Modal -->
     <div id="booking-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn">x</span>
@@ -51,18 +48,16 @@
                     <label for="delete-password">Cancelation Password</label>
                     <input type="password" id="delete-password" required minlength="4">
                 </div>
-                <!-- Extra spacing -->
-                <div style="height: 20px;"></div>
                 <button type="submit" class="confirm-btn">Confirm</button>
             </form>
         </div>
     </div>
 
-    <!-- Firebase (Modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
+        // IMPORTANT: Replace with your actual Firebase config
         const firebaseConfig = {
             apiKey: "AIzaSyDAA9dcHLGgZWfH6FzHqj1EO5pkOz5A778",
             authDomain: "booking-kf-double.firebaseapp.com",
