@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const successMessage = document.getElementById('success-message');
 
     const ROOMS = [
-        { id: 'downstairs', name: 'منارە', collection: 'bookings_downstairs' },
-        { id: 'upstairs',   name: 'قەڵا',      collection: 'bookings_upstairs' }
+        { id: 'downstairs', name: 'Downstairs', collection: 'bookings_downstairs' },
+        { id: 'upstairs',   name: 'Upstairs',      collection: 'bookings_upstairs' }
     ];
 
     // Dynamic Room Section Generation
@@ -344,4 +344,5 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.onclick = () => modal.style.display = 'none';
     window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
 });
+
 
