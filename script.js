@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelPasswordInput = document.getElementById('cancel-password');
     const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
 
-    // State & Config
+    // Config
     const ROOM_COLLECTION = 'bookings_downstairs';
     let state = { selectedDate: '', datePickerInstance: null };
     let cancelState = { id: null, actualPassword: null };
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const showMessage = (msg, isError = false) => {
         successMessage.textContent = msg;
-        successMessage.style.color = isError ? "#e74c3c" : "#27ae60";
+        successMessage.style.color = isError ? "#ef4444" : "#10b981"; // Red or Green
         successMessage.classList.add('visible-message');
         setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
     };
@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusHTML = '<span class="status-label status-done">Done</span>';
                     isPast = true;
                 } else {
+                    div.classList.add('upcoming');
                     statusHTML = '<span class="status-label status-upcoming">Upcoming</span>';
                 }
             } else if (state.selectedDate < todayStr()) {
@@ -80,25 +81,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusHTML = '<span class="status-label status-done">Done</span>';
                 isPast = true;
             } else {
+                div.classList.add('upcoming');
                 statusHTML = '<span class="status-label status-upcoming">Upcoming</span>';
             }
             
             const infoDiv = document.createElement('div');
             infoDiv.className = 'slot-info';
             infoDiv.innerHTML = `
-                <strong class="slot-time">${b.startTime} - ${b.endTime}</strong>
-                <span class="slot-details">${b.name} - ${b.project}</span>
+                <span class="slot-time">${b.startTime} - ${b.endTime}</span>
+                <span class="slot-details">${b.name} (${b.project})</span>
             `;
 
             const controlDiv = document.createElement('div');
             controlDiv.className = 'slot-controls';
             controlDiv.innerHTML = statusHTML;
 
-            // Add Cancel Button
             if (!isPast) {
                 const cancelBtn = document.createElement('button');
                 cancelBtn.className = 'delete-icon-btn';
-                cancelBtn.innerHTML = `✕`; // Simple X character instead of emoji
+                cancelBtn.innerHTML = `✕`; 
+                cancelBtn.title = "Cancel Booking";
                 cancelBtn.onclick = () => {
                     cancelState = { id: b.id, actualPassword: b.password };
                     cancelPasswordInput.value = '';
@@ -170,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Initialize Datepicker
     state.datePickerInstance = flatpickr(dateInput, {
         minDate: "today",
         dateFormat: "Y-m-d",
@@ -184,14 +185,13 @@ document.addEventListener('DOMContentLoaded', () => {
     state.datePickerInstance.setDate('today', true);
     todayBtn.addEventListener('click', () => state.datePickerInstance.setDate('today', true));
 
-    // Check Availability & Open Modal
     checkBtn.addEventListener('click', async () => {
         const start = startSel.value, end = endSel.value;
         const selectedDate = state.selectedDate; 
 
         if (!selectedDate) return showMessage('Please select a date.', true);
         if (startSel.selectedOptions[0]?.disabled || endSel.selectedOptions.length === 0 || endSel.selectedOptions[0]?.disabled) {
-             return showMessage('Slot unavailable. Choose another.', true);
+             return showMessage('Slot unavailable.', true);
         }
         if (!start || !end) return showMessage('Select start and end time.', true);
         if (timeToMinutes(end) <= timeToMinutes(start)) return showMessage('End time must be after start.', true);
@@ -201,20 +201,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const snap = await getDocs(query(col, where('date', '==', selectedDate)));
             if (checkOverlap(snap.docs.map(d => d.data()), start, end)) {
                 fetchBookings(selectedDate); 
-                return showMessage('Slot just taken. Choose another.', true);
+                return showMessage('Slot just taken.', true);
             }
-
-            modalTimeSlot.textContent = `Time: ${start} - ${end} on ${selectedDate}`;
+            modalTimeSlot.textContent = `${selectedDate} | ${start} to ${end}`;
             bookingForm.dataset.startTime = start;
             bookingForm.dataset.endTime = end;
             modal.style.display = 'flex';
         } catch (err) {
             console.error(err);
-            showMessage('Network error. Try again.', true);
+            showMessage('Network error.', true);
         }
     });
 
-    // Submit Booking
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const col = collection(db, ROOM_COLLECTION);
@@ -228,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const snap = await getDocs(query(col, where('date', '==', state.selectedDate)));
             if (checkOverlap(snap.docs.map(d => d.data()), startTime, endTime)) {
                 modal.style.display = 'none';
-                return showMessage('Slot taken by someone else.', true);
+                return showMessage('Slot taken.', true);
             }
 
             await addDoc(col, {
@@ -246,10 +244,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Cancel Booking
     confirmCancelBtn.addEventListener('click', async () => {
         const inputPass = cancelPasswordInput.value;
-        if (!inputPass) return showMessage('Enter password to cancel', true);
+        if (!inputPass) return showMessage('Enter password', true);
 
         if (inputPass === cancelState.actualPassword) {
             try {
@@ -265,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Close Modals
     document.querySelectorAll('.close-btn').forEach(btn => {
         btn.onclick = () => { modal.style.display = 'none'; cancelModal.style.display = 'none'; };
     });
