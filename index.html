@@ -2,51 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>KF Meeting Rooms</title>
     <link rel="icon" type="image/jpeg" href="kf_logo.jpg">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header-section">
-            <img src="kf_logo.jpg" alt="KF Logo" class="logo">
-            <h1>Meeting Room Booking</h1>
-            <p id="success-message" class="hidden-message">Booking confirmed</p>
-        </div>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-title">
+                <img src="kf_logo.jpg" alt="KF Logo" class="logo">
+                <h1>Room Booking</h1>
+            </div>
+            <p id="success-message" class="hidden-message">Action Successful</p>
+        </header>
 
-        <div class="tab-header">
+        <div class="segmented-control">
             <button class="tab-btn active" data-room="downstairs">
-                <img src="booking_downstairs.jpg" alt="Minara" class="tab-img">
-                <span>Downstairs</span>
+                <span class="room-icon">👇</span> Downstairs
             </button>
             <button class="tab-btn" data-room="upstairs">
-                <img src="booking_upstairs.jpg" alt="Qala" class="tab-img">
-                <span>Upstairs</span>
+                <span class="room-icon">👆</span> Upstairs
             </button>
         </div>
 
-        <div id="room-content"></div>
+        <main id="room-content" class="scrollable-content"></main>
     </div>
 
     <div id="booking-modal" class="modal">
         <div class="modal-content">
-            <span class="close-btn">x</span>
-            <h2>Confirm Booking <span id="modal-room-name"></span></h2>
-            <p id="modal-time-slot"></p>
+            <span class="close-btn">&times;</span>
+            <h2>Confirm Booking</h2>
+            <p id="modal-room-name" class="highlight-room"></p>
+            <p id="modal-time-slot" class="text-muted"></p>
             <form id="booking-form">
                 <div class="form-group">
                     <label for="name">Your Name</label>
-                    <input type="text" id="name" required>
+                    <input type="text" id="name" placeholder="e.g. John Doe" required>
                 </div>
                 <div class="form-group">
                     <label for="project">Project / Subsidiary</label>
-                    <input type="text" id="project" required>
+                    <input type="text" id="project" placeholder="e.g. Marketing Team" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Cancellation Password</label>
+                    <input type="password" id="password" placeholder="Create a password to cancel later" required>
                 </div>
                 
-                <button type="submit" class="confirm-btn">Confirm</button>
+                <button type="submit" class="primary-btn">Confirm Booking</button>
             </form>
+        </div>
+    </div>
+
+    <div id="cancel-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-cancel-btn close-btn">&times;</span>
+            <h2>Cancel Booking</h2>
+            <p class="text-muted">Enter the password you created when booking this slot.</p>
+            <div class="form-group">
+                <input type="password" id="cancel-password" placeholder="Booking Password" required>
+            </div>
+            <button id="confirm-cancel-btn" class="danger-btn">Delete Booking</button>
         </div>
     </div>
 
@@ -54,7 +71,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-        // IMPORTANT: Replace with your actual Firebase config
         const firebaseConfig = {
             apiKey: "AIzaSyDAA9dcHLGgZWfH6FzHqj1EO5pkOz5A778",
             authDomain: "booking-kf-double.firebaseapp.com",
@@ -73,8 +89,3 @@
     <script type="module" src="script.js"></script>
 </body>
 </html>
-
-
-
-
-
