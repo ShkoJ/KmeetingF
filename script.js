@@ -1,10 +1,10 @@
 import { 
-    collection, addDoc, getDocs, query, where, onSnapshot, serverTimestamp 
+    collection, addDoc, getDocs, query, where, onSnapshot, serverTimestamp, deleteDoc, doc 
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
     const db = window.db;
-    if (!db) return alert("Firebase not loaded. Please ensure the Firebase initialization script is correct in index.html.");
+    if (!db) return alert("Firebase not loaded. Check index.html.");
 
     const roomContent = document.getElementById('room-content');
     const modal = document.getElementById('booking-modal');
@@ -14,10 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.querySelector('.close-btn');
     const successMessage = document.getElementById('success-message');
 
+    // Cancel Modal Elements
+    const cancelModal = document.getElementById('cancel-modal');
+    const closeCancelBtn = document.querySelector('.close-cancel-btn');
+    const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+    const cancelPasswordInput = document.getElementById('cancel-password');
+
     const ROOMS = [
-        { id: 'downstairs', name: 'Downstairs', collection: 'bookings_downstairs' },
-        { id: 'upstairs',   name: 'Upstairs',      collection: 'bookings_upstairs' }
+        { id: 'downstairs', name: 'Downstairs Room', collection: 'bookings_downstairs', img: 'booking_downstairs.jpg' },
+        { id: 'upstairs',   name: 'Upstairs Room',   collection: 'bookings_upstairs', img: 'booking_upstairs.jpg' }
     ];
+
+    let cancelState = { id: null, collection: null, actualPassword: null };
 
     // Dynamic Room Section Generation
     ROOMS.forEach(room => {
@@ -27,32 +35,36 @@ document.addEventListener('DOMContentLoaded', () => {
         section.dataset.room = room.id;
 
         section.innerHTML = `
-            <div class="booking-options-section">
-                <h2>Select Date & Time – ${room.name}</h2>
+            <div class="room-indicator">
+                <img src="${room.img}" alt="${room.name}" class="room-hero-img">
+                <h2>📍 You are viewing: <span>${room.name}</span></h2>
+            </div>
+
+            <div class="card booking-card">
+                <h3>Select Date & Time</h3>
                 <div class="form-group date-picker-group">
-                    <label for="booking-date-${room.id}">Select Date:</label>
                     <div class="date-input-wrapper">
                         <input type="text" id="booking-date-${room.id}" class="form-control" placeholder="Select a date...">
-                        <button class="today-btn" data-room="${room.id}">Today</button>
+                        <button class="icon-btn today-btn" data-room="${room.id}">Today</button>
                     </div>
                 </div>
                 <div class="time-selectors">
-                    <div class="form-group">
-                        <label for="start-time-${room.id}">Start Time:</label>
+                    <div class="form-group half-width">
+                        <label for="start-time-${room.id}">Start</label>
                         <select id="start-time-${room.id}" class="time-select"></select>
                     </div>
-                    <div class="form-group">
-                        <label for="end-time-${room.id}">End Time:</label>
+                    <div class="form-group half-width">
+                        <label for="end-time-${room.id}">End</label>
                         <select id="end-time-${room.id}" class="time-select"></select>
                     </div>
                 </div>
-                <button class="book-btn" data-room="${room.id}">Check Availability & Book</button>
+                <button class="primary-btn book-btn" data-room="${room.id}">Check Availability & Book</button>
             </div>
 
-            <div class="booked-times-section">
-                <h2>Booked Meetings – ${room.name}</h2>
+            <div class="schedule-section">
+                <h3>Schedule for Selected Date</h3>
                 <div id="booked-times-list-${room.id}" class="time-slots">
-                    <p>Select a date to view bookings.</p>
+                    <p class="empty-state">Select a date to view bookings.</p>
                 </div>
             </div>
         `;
@@ -70,6 +82,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return bookings.some(b => timeToMinutes(b.startTime) < end && timeToMinutes(b.endTime) > start);
     };
 
+    const showMessage = (msg, isError = false) => {
+        successMessage.textContent = msg;
+        successMessage.style.color = isError ? "var(--danger)" : "var(--success)";
+        successMessage.classList.add('visible-message');
+        setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
+    };
+
     const state = {};
 
     const initRoom = room => {
@@ -81,53 +100,61 @@ document.addEventListener('DOMContentLoaded', () => {
         const bookedList = document.getElementById(`booked-times-list-${prefix}`);
         const todayBtn = document.querySelector(`.today-btn[data-room="${prefix}"]`);
 
-        state[prefix] = {
-            selectedDate: '',
-            datePickerInstance: null
-        };
+        state[prefix] = { selectedDate: '', datePickerInstance: null };
 
         const renderBookedTimes = bookings => {
             bookedList.innerHTML = '';
             if (!bookings.length) {
-                bookedList.innerHTML = '<p style="text-align:center; color: #27ae60;">No bookings for this date. All clear!</p>';
+                bookedList.innerHTML = '<p class="empty-state success-text">No bookings for this date. All clear!</p>';
                 return;
             }
             bookings.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
             bookings.forEach(b => {
                 const div = document.createElement('div');
                 div.className = 'booked-slot';
-                let status = '';
-                const today = todayStr();
+                
                 const now = new Date().getHours() * 60 + new Date().getMinutes();
                 const bs = timeToMinutes(b.startTime), be = timeToMinutes(b.endTime);
+                let isPast = false;
 
-                if (state[prefix].selectedDate === today) {
+                if (state[prefix].selectedDate === todayStr()) {
                     if (bs <= now && now < be) {
                         div.classList.add('ongoing');
-                        status = '<span class="status-label status-ongoing">Ongoing</span>';
                     } else if (be <= now) {
                         div.classList.add('done');
-                        status = '<span class="status-label" style="background: #95a5a6;">Done</span>'; 
+                        isPast = true;
                     } else {
                         div.classList.add('upcoming');
-                        status = '<span class="status-label status-upcoming">Upcoming</span>';
                     }
+                } else if (state[prefix].selectedDate < todayStr()) {
+                    div.classList.add('done');
+                    isPast = true;
                 } else {
                     div.classList.add('upcoming');
-                    status = '<span class="status-label status-upcoming">Upcoming</span>';
                 }
                 
-                const timeDiv = document.createElement('div');
-                timeDiv.innerHTML = `
-                    <strong>${b.startTime} - ${b.endTime}</strong>
-                    <span>${b.name} - ${b.project}</span>
+                div.innerHTML = `
+                    <div class="slot-info">
+                        <strong class="slot-time">${b.startTime} - ${b.endTime}</strong>
+                        <span class="slot-details">${b.name} <span class="bullet">•</span> ${b.project}</span>
+                    </div>
                 `;
-                
-                const controlDiv = document.createElement('div');
-                controlDiv.innerHTML = status;
 
-                div.appendChild(timeDiv);
-                div.appendChild(controlDiv);
+                // Add Cancel Button if not in the past
+                if (!isPast) {
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'delete-icon-btn';
+                    cancelBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                    `;
+                    cancelBtn.onclick = () => {
+                        cancelState = { id: b.id, collection: room.collection, actualPassword: b.password };
+                        cancelPasswordInput.value = '';
+                        cancelModal.style.display = 'flex';
+                    };
+                    div.appendChild(cancelBtn);
+                }
+
                 bookedList.appendChild(div);
             });
         };
@@ -160,12 +187,11 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             for (let i = 0; i < 24 * 60 / interval; i++) {
-                const mins = i * interval;
-                addOption(startSel, mins, true);
+                addOption(startSel, i * interval, true);
             }
             
             if (state[prefix].selectedDate === today) {
-                const nowMins = Math.ceil((now.getHours() * 60 + now.getMinutes()) / interval) * interval;
+                const nowMins = Math.ceil(curMin / interval) * interval;
                 if (nowMins < timeToMinutes('24:00')) {
                     const nowTime = `${pad(Math.floor(nowMins / 60))}:${pad(nowMins % 60)}`;
                     const opt = document.createElement('option');
@@ -189,9 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     endSel.innerHTML = '<option value="">--</option>';
                     return; 
                 }
-                
                 const startMins = timeToMinutes(s); 
-                
                 for (let i = Math.ceil(startMins / interval) + 1; i <= 24 * 60 / interval; i++) {
                     const mins = i * interval;
                     const time = `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
@@ -214,12 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const fetchBookings = date => {
             if (!date) {
-                bookedList.innerHTML = '<p>Select a date to view bookings.</p>';
+                bookedList.innerHTML = '<p class="empty-state">Select a date to view bookings.</p>';
                 populateTimeSelectors([]);
                 return;
             }
             const q = query(collection(db, room.collection), where('date', '==', date));
-            
             onSnapshot(q, snap => {
                 const bookings = [];
                 snap.forEach(doc => bookings.push({ ...doc.data(), id: doc.id }));
@@ -231,60 +254,55 @@ document.addEventListener('DOMContentLoaded', () => {
         const dp = flatpickr(dateInput, {
             minDate: "today",
             dateFormat: "Y-m-d",
+            disableMobile: "true", // Forces modern web UI instead of native ugly scrollers
             onChange: (selectedDates, dateStr) => {
                 state[prefix].selectedDate = dateStr; 
                 fetchBookings(dateStr);
             }
         });
         state[prefix].datePickerInstance = dp;
-        
         dp.setDate('today', true);
 
-        todayBtn.addEventListener('click', () => {
-            dp.setDate('today', true);
-        });
+        todayBtn.addEventListener('click', () => dp.setDate('today', true));
 
         checkBtn.addEventListener('click', async () => {
             const start = startSel.value, end = endSel.value;
             const selectedDate = state[prefix].selectedDate; 
 
-            if (!selectedDate) return alert('Please select a date first.');
+            if (!selectedDate) return showMessage('Please select a date.', true);
             if (startSel.selectedOptions[0].disabled || endSel.selectedOptions.length === 0 || endSel.selectedOptions[0].disabled) {
-                 return alert('The selected time slot is already booked or invalid. Please choose another.');
+                 return showMessage('Slot unavailable. Choose another.', true);
             }
-            if (!start || !end) return alert('Please select both start and end time.');
-            if (timeToMinutes(end) <= timeToMinutes(start)) return alert('End time must be after start time.');
+            if (!start || !end) return showMessage('Select start and end time.', true);
+            if (timeToMinutes(end) <= timeToMinutes(start)) return showMessage('End time must be after start.', true);
 
             const roomData = ROOMS.find(r => r.id === prefix);
             const col = collection(db, roomData.collection);
             
             try {
                 const snap = await getDocs(query(col, where('date', '==', selectedDate)));
-                const currentBookings = snap.docs.map(d => d.data());
-                
-                if (checkOverlap(currentBookings, start, end)) {
-                    alert('This slot was just booked by someone else. Please choose another time.');
+                if (checkOverlap(snap.docs.map(d => d.data()), start, end)) {
                     fetchBookings(selectedDate); 
-                    return; 
+                    return showMessage('Slot just taken. Choose another.', true);
                 }
 
-                modalRoomName.textContent = room.name;
-                modalTimeSlot.textContent = `Time: ${start} - ${end} on ${selectedDate}`;
+                modalRoomName.textContent = `📍 ${room.name}`;
+                modalTimeSlot.textContent = `${selectedDate} | ${start} to ${end}`;
                 bookingForm.dataset.startTime = start;
                 bookingForm.dataset.endTime = end;
                 bookingForm.dataset.room = prefix;
                 modal.style.display = 'flex';
                 
             } catch (err) {
-                console.error("Error during pre-booking check:", err);
-                alert('An error occurred during availability check. Please try again.');
+                console.error(err);
+                showMessage('Network error. Try again.', true);
             }
         });
     };
 
     ROOMS.forEach(initRoom);
 
-    // Tab switching
+    // Tab switching (Segmented Control)
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -295,10 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    const firstTabBtn = document.querySelector('.tab-btn');
-    if (firstTabBtn) firstTabBtn.click();
+    document.querySelector('.tab-btn').click();
 
-    // BOOKING SUBMISSION (NO PASSWORD SAVED)
+    // BOOKING SUBMISSION
     bookingForm.addEventListener('submit', async e => {
         e.preventDefault();
         const roomId = bookingForm.dataset.room;
@@ -307,42 +324,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const name = document.getElementById('name').value.trim();
         const project = document.getElementById('project').value.trim();
+        const password = document.getElementById('password').value;
         const startTime = bookingForm.dataset.startTime;
         const endTime = bookingForm.dataset.endTime;
         const bookingDate = state[roomId].selectedDate; 
 
-        if (!bookingDate) return alert('No date selected.');
-
         try {
             const snap = await getDocs(query(col, where('date', '==', bookingDate)));
-            const current = snap.docs.map(d => d.data());
-            if (checkOverlap(current, startTime, endTime)) {
-                alert('This slot was just booked by someone else. Please choose another time.');
+            if (checkOverlap(snap.docs.map(d => d.data()), startTime, endTime)) {
                 modal.style.display = 'none';
-                return;
+                return showMessage('Slot taken by someone else.', true);
             }
 
             await addDoc(col, {
-                name, project,
+                name, project, password, 
                 startTime, endTime, date: bookingDate,
                 timestamp: serverTimestamp()
             });
 
             modal.style.display = 'none';
-            document.getElementById('name').value = '';
-            document.getElementById('project').value = '';
-
-            successMessage.classList.add('visible-message');
-            setTimeout(() => successMessage.classList.remove('visible-message'), 3000);
+            bookingForm.reset();
+            showMessage('Booking Confirmed! ✅');
 
         } catch (err) {
             console.error(err);
-            alert('Failed to book. Please try again.');
+            showMessage('Failed to book.', true);
         }
     });
 
+    // CANCELLATION SUBMISSION
+    confirmCancelBtn.addEventListener('click', async () => {
+        const inputPass = cancelPasswordInput.value;
+        if (!inputPass) return showMessage('Enter password to cancel', true);
+
+        if (inputPass === cancelState.actualPassword) {
+            try {
+                await deleteDoc(doc(db, cancelState.collection, cancelState.id));
+                cancelModal.style.display = 'none';
+                showMessage('Booking Cancelled 🗑️');
+            } catch (err) {
+                console.error(err);
+                showMessage('Error deleting booking', true);
+            }
+        } else {
+            showMessage('Incorrect Password!', true);
+        }
+    });
+
+    // Modal Close logic
     closeBtn.onclick = () => modal.style.display = 'none';
-    window.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    closeCancelBtn.onclick = () => cancelModal.style.display = 'none';
+    window.onclick = e => { 
+        if (e.target === modal) modal.style.display = 'none'; 
+        if (e.target === cancelModal) cancelModal.style.display = 'none'; 
+    };
 });
-
-
