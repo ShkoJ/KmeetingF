@@ -3,53 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KF Meeting Rooms</title>
+    <title>Meeting Room Booking</title>
     <link rel="icon" type="image/jpeg" href="kf_logo.jpg">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 <body>
     <div class="app-container">
-        <header class="app-header">
-            <div class="logo-title">
-                <img src="kf_logo.jpg" alt="KF Logo" class="logo">
-                <h1>Room Booking</h1>
-            </div>
+        <div class="main-card">
+            <h1 class="page-title">Meeting Room Booking</h1>
             <p id="success-message" class="hidden-message">Action Successful</p>
-        </header>
+            
+            <div class="booking-grid">
+                <div class="booking-panel">
+                    <h3>Select Date & Time</h3>
+                    <div class="form-group">
+                        <label for="booking-date">Select Date:</label>
+                        <div class="date-input-wrapper">
+                            <input type="text" id="booking-date" class="form-control" placeholder="Select a date...">
+                            <button id="today-btn" class="today-btn">Today</button>
+                        </div>
+                    </div>
+                    <div class="time-selectors">
+                        <div class="form-group">
+                            <label for="start-time">Start Time:</label>
+                            <select id="start-time" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="end-time">End Time:</label>
+                            <select id="end-time" class="form-control"></select>
+                        </div>
+                    </div>
+                    <button id="book-btn" class="book-btn">Check Availability & Book</button>
+                </div>
 
-        <div class="segmented-control">
-            <button class="tab-btn active" data-room="downstairs">
-                <span class="room-icon">👇</span> Downstairs
-            </button>
-            <button class="tab-btn" data-room="upstairs">
-                <span class="room-icon">👆</span> Upstairs
-            </button>
+                <div class="booking-panel">
+                    <h3>Booked Meetings</h3>
+                    <div id="booked-times-list" class="time-slots">
+                        <p class="empty-state">Select a date to view bookings.</p>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <main id="room-content" class="scrollable-content"></main>
     </div>
 
     <div id="booking-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h2>Confirm Booking</h2>
-            <p id="modal-room-name" class="highlight-room"></p>
             <p id="modal-time-slot" class="text-muted"></p>
             <form id="booking-form">
                 <div class="form-group">
                     <label for="name">Your Name</label>
-                    <input type="text" id="name" placeholder="e.g. John Doe" required>
+                    <input type="text" id="name" required>
                 </div>
                 <div class="form-group">
                     <label for="project">Project / Subsidiary</label>
-                    <input type="text" id="project" placeholder="e.g. Marketing Team" required>
+                    <input type="text" id="project" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Cancellation Password</label>
-                    <input type="password" id="password" placeholder="Create a password to cancel later" required>
+                    <input type="password" id="password" placeholder="Password to cancel later" required>
                 </div>
-                
                 <button type="submit" class="primary-btn">Confirm Booking</button>
             </form>
         </div>
