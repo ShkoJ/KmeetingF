@@ -11,33 +11,44 @@
 <body>
     <div class="app-container">
         <div class="main-card">
-            <h1 class="page-title">Meeting Room Booking</h1>
-            <p id="success-message" class="hidden-message">Action Successful</p>
+            
+            <div class="header-section">
+                <img src="kf_logo.jpg" alt="Logo" class="app-logo">
+                <h1 class="page-title">Meeting Room Booking</h1>
+                <p id="success-message" class="hidden-message">Action Successful</p>
+            </div>
             
             <div class="booking-grid">
-                <div class="booking-panel">
+                <div class="booking-panel input-panel">
                     <h3>Select Date & Time</h3>
+                    
                     <div class="form-group">
-                        <label for="booking-date">Select Date:</label>
+                        <label for="booking-date">Select Date</label>
                         <div class="date-input-wrapper">
-                            <input type="text" id="booking-date" class="form-control" placeholder="Select a date...">
-                            <button id="today-btn" class="today-btn">Today</button>
+                            <input type="text" id="booking-date" class="form-control" placeholder="Choose a date...">
+                            <button id="today-btn" class="secondary-btn">Today</button>
                         </div>
                     </div>
-                    <div class="time-selectors">
-                        <div class="form-group">
-                            <label for="start-time">Start Time:</label>
-                            <select id="start-time" class="form-control"></select>
+
+                    <div class="time-row">
+                        <div class="form-group half">
+                            <label for="start-time">Start</label>
+                            <div class="select-wrapper">
+                                <select id="start-time" class="form-control"></select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="end-time">End Time:</label>
-                            <select id="end-time" class="form-control"></select>
+                        <div class="form-group half">
+                            <label for="end-time">End</label>
+                            <div class="select-wrapper">
+                                <select id="end-time" class="form-control"></select>
+                            </div>
                         </div>
                     </div>
+
                     <button id="book-btn" class="book-btn">Check Availability & Book</button>
                 </div>
 
-                <div class="booking-panel">
+                <div class="booking-panel schedule-panel">
                     <h3>Booked Meetings</h3>
                     <div id="booked-times-list" class="time-slots">
                         <p class="empty-state">Select a date to view bookings.</p>
@@ -51,19 +62,19 @@
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h2>Confirm Booking</h2>
-            <p id="modal-time-slot" class="text-muted"></p>
+            <p id="modal-time-slot" class="modal-subtitle"></p>
             <form id="booking-form">
                 <div class="form-group">
                     <label for="name">Your Name</label>
-                    <input type="text" id="name" required>
+                    <input type="text" id="name" class="form-control" placeholder="e.g. John Doe" required>
                 </div>
                 <div class="form-group">
                     <label for="project">Project / Subsidiary</label>
-                    <input type="text" id="project" required>
+                    <input type="text" id="project" class="form-control" placeholder="e.g. Marketing" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Cancellation Password</label>
-                    <input type="password" id="password" placeholder="Password to cancel later" required>
+                    <input type="password" id="password" class="form-control" placeholder="Create a password..." required>
                 </div>
                 <button type="submit" class="primary-btn">Confirm Booking</button>
             </form>
@@ -74,9 +85,9 @@
         <div class="modal-content">
             <span class="close-cancel-btn close-btn">&times;</span>
             <h2>Cancel Booking</h2>
-            <p class="text-muted">Enter the password you created when booking this slot.</p>
+            <p class="modal-subtitle">Enter the password used for this booking.</p>
             <div class="form-group">
-                <input type="password" id="cancel-password" placeholder="Booking Password" required>
+                <input type="password" id="cancel-password" class="form-control" placeholder="Password" required>
             </div>
             <button id="confirm-cancel-btn" class="danger-btn">Delete Booking</button>
         </div>
